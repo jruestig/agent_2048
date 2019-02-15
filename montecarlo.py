@@ -1,58 +1,60 @@
 import numpy as np
-from random import choice
-from environment.environment import Environment
+from environment.movement import game_move, action_to_dir_and_ax
+from environment.environment import start
 
 
-class MonteCarlo():
-    def __init__(self, sample_size=40):
-        self.sample_size = int(sample_size/4)
+def monte_carlo_tree_value(field, n, maxmoves=20, returnscores=False,
+                           startaction=None):
+    score = np.zeros(n)
+    rewards = np.zeros(n)
+    fields = np.ones((n,) + field.shape) * field
 
-    def roll_out(self, env, board):
-        moves = []
-        for action in range(4):
-            moves.append(self.run(action, env, board))
-        return moves
+    if startaction is not None:
+        fields, rewards = game_move(fields, *action_to_dir_and_ax(startaction))
+        score += rewards
 
-    def run(self, action, env, board):
-        if action not in env.legal_actions(board):
-            return 0.
-        cboards = [board for _ in range(self.sample_size)]
-        runs = []
-        for board in cboards:
-            board, score, done = env.step(board, 0, action)
-            while not done:
-                move = choice(env.legal_actions(board))
-                board, score, done = env.step(board, score, move)
-            runs.append(score)
-        return np.array(runs).mean()
+    for i in range(0, maxmoves):
+        actions = np.random.randint(0, 4, n)
 
-    def predict(self, env, board):
-        eva = np.array(self.roll_out(env, board))
-        print(eva)
-        return eva.argmax()
+        for a in (0, 1, 2, 3):  # *action_to_dir_and_ax(a)
+            fields[actions == a], rewards[actions == a] = (
+                game_move(fields[actions == a], *action_to_dir_and_ax(a)))
+
+        score += rewards
+
+    if returnscores:
+        return score
+    else:
+        return np.mean(score)
 
 
-if __name__ == "__main__":
-    import sys
+def monte_carlo_tree_action_values(field, n, maxmoves=20):
+    q = np.zeros(4)
+    for a in (0, 1, 2, 3):
+        q[a] = monte_carlo_tree_value(field, n, maxmoves=maxmoves,
+                                      startaction=a)
+    return q
 
-    def display(board):
-        sys.stdout.write("\r")
-        sys.stdout.flush()
-        sys.stdout.write(board.__repr__())
 
-    episodes = 1
-    env = Environment()
-    agent = MonteCarlo()
-    agent2 = MonteCarlo()
-    agent2.sample_size = 20
-    for ii in range(episodes):
-        board, score, done = env.start()
-        while not done:
-            action = agent.predict(env, board)
-            print(board)
-            print("-"*60)
-            board, score, done = env.step(board, score, action)
+class Monte():
+    def __init__(self, breadth, depth):
+        self.breadth = breadth
+        self.depth = depth
 
-        # for time in range(2500):
-        #     action = agent.act(board)
-        #     board, score, done = env.step(board, score, action)
+    def act(self, state):
+        q = monte_carlo_tree_action_values(state, self.breadth, self.depth)
+        return q, np.argmax(q)
+
+
+agent = Monte(4000, 20)
+state, score = start()
+
+for ii in range(1000000):
+    q, a = agent.act(state)
+    state, sc = game_move(state, *action_to_dir_and_ax(a))
+    score += sc
+    if (q == np.zeros([4])).all():
+        print(state)
+        break
+    if ii % 3:
+        print(state, q)
