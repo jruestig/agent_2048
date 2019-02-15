@@ -1,127 +1,98 @@
 import numpy as np
 
 
-def place_random(oboard):
-    board = oboard.copy()
-    a = 2
-    count = board.shape[0]*board.shape[1]
-    while a != 0:
-        cr = np.random.randint(0, board.shape[0])
-        rr = np.random.randint(0, board.shape[1])
-        a = board[cr][rr]
-        count -= 1
-        if count < 0:
-            return board
-    board[cr][rr] = 2
-    return board
+def shift_and_merge(arr, direction=-1, axis=-1):
+    # returns narr, reward
+    def shift(arr, direction=1, axis=-1):
+        if direction < 0:
+            seg = (arr == 0)
+        else:
+            seg = arr > 0
+
+        srt = np.argsort(seg, axis=axis)
+
+        return np.take_along_axis(arr, srt, axis=axis)
+
+    def slice_axis(axis, myslice):
+        if axis == -1:
+            return np.s_[..., myslice]
+        elif axis == -2:
+            return np.s_[..., myslice, :]
+        else:
+            assert 0, "wrong :P"
+
+    arrn = shift(arr, axis=axis, direction=direction)
+
+    if direction < 0:
+        slice_p1 = slice_axis(axis, np.s_[1:])
+        slice_0 = slice_axis(axis, np.s_[:-1])
+    else:
+        slice_0 = slice_axis(axis, np.s_[1:])
+        slice_p1 = slice_axis(axis, np.s_[:-1])
+
+    havetomerge = (arrn[slice_p1] == arrn[slice_0]) & (arrn[slice_0] > 0)
+
+    if direction < 0:
+        inds = range(0, havetomerge.shape[axis]-1)
+    else:
+        inds = range(havetomerge.shape[axis]-1, 0, -1)
+
+    for i in inds:
+        if direction < 0:
+            slice_ip1 = slice_axis(axis, i+1)
+            slice_i0 = slice_axis(axis, i)
+        else:
+            slice_i0 = slice_axis(axis, i)
+            slice_ip1 = slice_axis(axis, i-1)
+
+        havetomerge[slice_ip1] = (havetomerge[slice_ip1] &
+                                  (~havetomerge[slice_i0]))
+
+    reward = 2 * np.sum(havetomerge * arrn[slice_0], axis=(-1, -2))
+
+    arrn[slice_0][havetomerge] *= 2
+    arrn[slice_p1][havetomerge] = 0
+
+    arrn = shift(arrn, direction=direction, axis=axis)
+
+    return arrn, reward
 
 
-def merge_left(oboard, score):
-    def shift_zero(array, times):
-        for k in range(times):
-            for ii in range(len(array)-1):
-                if array[ii] == 0:
-                    array[ii] = array[ii+1]
-                    array[ii+1] = 0
-    board = oboard.copy()
-    for row in board:
-        count = 0
-        shift_zero(row, (row == 0).sum())
-        for ii in range(len(row)-1):
-            if row[ii] == row[ii+1]:
-                row[ii] *= 2
-                score += int(row[ii])
-                row[ii+1] = 0
-                count += 1
-        shift_zero(row, count)
-    return board, score
+def game_move(arr, direction=-1, axis=-1):
+    arrn, reward = shift_and_merge(arr, direction=direction, axis=axis)
+    nothing_changed = np.min(arr == arrn, axis=(-1, -2)).flatten()
+
+    arrnflat = arrn.reshape((-1, ) + arrn.shape[-2:])
+
+    num_zero = np.sum(arrnflat == 0, axis=(-1, -2))
+    newpos = np.random.randint(0, 13837458124, arrnflat.shape[0])  # % num_zero
+
+    newpos = newpos % np.clip(num_zero, 1, None)
+    delete = np.where((num_zero == 0) | nothing_changed)
+
+    newpos = np.delete(newpos, delete)
+    num_zero = np.delete(num_zero, delete)
+
+    idzero = np.nonzero(arrnflat == 0)
+
+    newpos_shift = newpos + (np.cumsum(num_zero) - num_zero)
+
+    idselect = [idzero[0][newpos_shift], idzero[1][newpos_shift],
+                idzero[2][newpos_shift]]
+
+    arrnflat[tuple(idselect)] = np.random.choice((2,)*9 + (4,),
+                                                 size=(len(newpos)))
+    return arrnflat.reshape(arr.shape), reward
 
 
-def merge_right(board, score):
-    board = reverse(board)
-    board, score = merge_left(board, score)
-    return reverse(board), score
-
-
-def merge_up(board, score):
-    board = board.T
-    board, score = merge_left(board, score)
-    return board.T, score
-
-
-def merge_down(board, score):
-    board = board.T
-    board, score = merge_right(board, score)
-    return board.T, score
-
-
-def reverse(board):
-    new = []
-    for i in range(len(board)):
-        new.append([])
-        for j in range(len(board[0])):
-            new[i].append(board[i][len(board[0])-j-1])
-    return np.array(new)
-
-
-def move(board, score, direction):
-    oboard = board.copy()
-    if direction == 0:
-        board, score = merge_left(oboard, score)
-    elif direction == 1:
-        board, score = merge_right(oboard, score)
-    elif direction == 2:
-        board, score = merge_up(oboard, score)
-    elif direction == 3:
-        board, score = merge_down(oboard, score)
-    return board, score
-
-
-def game_state(mat):
-    if (mat == 0).any():
-        return "not over"
-    for i in range(len(mat)-1):  # intentionally reduced to check the row on the right and below
-        for j in range(len(mat[0])-1):  # more elegant to use exceptions but most likely this will be their solution
-            if mat[i][j] == mat[i+1][j] or mat[i][j+1] == mat[i][j]:
-                return 'not over'
-    for k in range(len(mat)-1):  # to check the left/right entries on the last row
-        if mat[len(mat)-1][k] == mat[len(mat)-1][k+1]:
-            return 'not over'
-    for j in range(len(mat)-1):   # check up/down entries on last column
-        if mat[j][len(mat)-1] == mat[j+1][len(mat)-1]:
-            return 'not over'
-    return 'lose'
-
-
-def done(mat):
-    # Not working
-    if (mat == 0).any():
-        return "not over"
-    for i in range(len(mat)):
-        for j in range(len(mat[0])):
-            print(i, j)
-            try:
-                if mat[i][j] == mat[i+1][j] or mat[i][j+1] == mat[i][j]:
-                    return 'not over'
-            except:
-                try:
-                    if mat[len(mat)-1][j] == mat[len(mat)-1][j+1]:
-                        return 'not over'
-                except:
-                    if mat[i][len(mat)-1] == mat[i+1][len(mat)-1]:
-                        return 'not over'
-                else:
-                    return 'lose'
-
-if __name__ == "__main__":
-    board = np.zeros((3, 3))
-    score = 0
-    for ii in range(162):
-        board = place_random(board)
-        print(40*"-")
-        board, score = move(board, score, np.random.randint(0, 4))
-        print(board)
-        if (game_state(board) != done(board)):
-            print(game_state(board), done(board))
-        if game_state(board) == "lose":
-            break
+def action_to_dir_and_ax(action):
+    if action == 0:
+        return -1, -1
+    elif action == 1:
+        return -1, -2
+    elif action == 2:
+        return 1, -1
+    elif action == 3:
+        return 1, -2
+    else:
+        assert 0, action
