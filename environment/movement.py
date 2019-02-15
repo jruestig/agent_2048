@@ -86,13 +86,13 @@ def game_move(arr, direction=-1, axis=-1):
 
 
 def action_to_dir_and_ax(action):
-    if action == 0:
+    if action == 0:      # left
         return -1, -1
-    elif action == 1:
+    elif action == 1:    # up
         return -1, -2
-    elif action == 2:
+    elif action == 2:    # right
         return 1, -1
-    elif action == 3:
+    elif action == 3:    # down
         return 1, -2
     else:
         assert 0, action
