@@ -74,16 +74,18 @@ class QValueAgent:
 state, score = start()
 agent = QValueAgent(state.shape, 4)
 
-for ii in range(1000000):
-    a = agent.act(state)
-    nstate, sc = game_move(state, *action_to_dir_and_ax(a))
-    if ii % 3:
-        print(state)
-    if (legal_moves(nstate)).sum() == 0:
-        agent.remember(state, a, sc, nstate, True)
-        print(nstate)
-        break
-    agent.remember(state, a, sc, nstate, False)
-    score += sc
-    state = nstate
-agent.train(19)
+for k in range(200):
+    for ii in range(1000000):
+        a = agent.act(state)
+        nstate, sc = game_move(state, *action_to_dir_and_ax(a))
+        if ii % 200:
+            print(state)
+        if (legal_moves(nstate)).sum() == 0:
+            agent.remember(state, a, sc, nstate, True)
+            print(nstate)
+            break
+        agent.remember(state, a, sc, nstate, False)
+        score += sc
+        state = nstate
+    agent.train(19)
+    state, score = start()
