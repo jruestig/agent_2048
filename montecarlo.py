@@ -46,15 +46,16 @@ class Monte():
         return q, np.argmax(q)
 
 
-agent = Monte(4000, 20)
-state, score = start()
+if __name__ == "__main__":
+    agent = Monte(160, 20)
+    state, score = start()
 
-for ii in range(1000000):
-    q, a = agent.act(state)
-    state, sc = game_move(state, *action_to_dir_and_ax(a))
-    score += sc
-    if (q == np.zeros([4])).all():
-        print(state)
-        break
-    if ii % 3:
-        print(state, q)
+    for ii in range(1000000):
+        q, a = agent.act(state)
+        state, sc = game_move(state, *action_to_dir_and_ax(a))
+        score += sc
+        if (q == np.zeros([4])).all():
+            print(state)
+            break
+        if ii % 3:
+            print(state, q)
