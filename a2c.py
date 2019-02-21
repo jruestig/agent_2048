@@ -13,18 +13,17 @@ from environment.movement import game_move, action_to_dir_and_ax
 from os.path import join
 import os
 
-n = 30  # len till bootstrap
 outputdir = "./output/ac"
 if not os.path.exists(outputdir):
     os.makedirs(outputdir)
 
 
 class AdvanActorCritic:
-    def __init__(self, state_shape, action_size, n, outdir):
+    def __init__(self, state_shape, action_size, gamma, n, outdir):
         self.input_shape = state_shape + (17,)
         self.action_size = action_size
 
-        self.gamma = 0.9**np.arange(n+1)  # dicount factor
+        self.gamma = gamma**np.arange(n+1)  # dicount factor
         self.lr_policy = 0.0001
         self.lr_value = 0.0001
 
@@ -73,8 +72,6 @@ class AdvanActorCritic:
         self.rewards.append(reward)
         self.states.append((state))
         self.action.append((action))
-        if len(self.rewards) != self.n:
-            return None
         self.memory.append((self.states[0], self.action[0],
                             list(self.rewards), self.states[-1]))
 
@@ -88,7 +85,7 @@ class AdvanActorCritic:
         for bstate, action, rewards, endstate in minibatch:
             bootstrap = self.value.predict(self.reshape(endstate))
             rewards = np.array(tuple(rewards) + (bootstrap,))
-            G = (self.gamma * rewards).sum()
+            G = (self.gamma[np.arange(len(rewards))] * rewards).sum()
             self.value.fit(self.reshape(endstate), G, epochs=1, verbose=0)
             pred = np.zeros((1, 4))
             pred[0][action] = G - self.value.predict(self.reshape(bstate))[0]
@@ -103,26 +100,27 @@ class AdvanActorCritic:
         self.policy.load_weights(pname)
 
 
+n = 30  # len till bootstrap
 state, r = start()
-agent = AdvanActorCritic(state.shape, 4, n, outputdir)
+agent = AdvanActorCritic(state.shape, 4, 0.999, n, outputdir)
+agent.load("./output/ac/value_0010.hdf5", "./output/ac/policy_0010.hdf5")
 
+x = 10
 
 for i in range(20000):
     state, r = start()
     agent.states.append((state))
-    # print(state)
-    for ii in range(200):
+    for ii in range(5000):
         a, pred = agent.act(state)
         state, re = game_move(state, *action_to_dir_and_ax(a))
         agent.remember(state, a, re, False)
         if legal_moves(state).sum() == 0:
             break
-        if ii % 40 == 0:
-            print(pred)
         r += re
-    print(r)
-    print(state)
+    print(r, state.max())
+    if state.max() >= 512:
+        print(state)
     agent.train(20)
     agent.init_remember(agent.n)
-    if i % 4 == 0:
-        agent.save("{:04}".format(int(i/4)))
+    if i % x == 0:
+        agent.save("{:04}".format(int(i/x)))
