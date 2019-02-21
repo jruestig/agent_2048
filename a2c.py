@@ -11,6 +11,12 @@ from environment.environment import legal_moves, start
 from environment.movement import game_move, action_to_dir_and_ax
 
 from os.path import join
+import os
+
+n = 30  # len till bootstrap
+outputdir = "./output/ac"
+if not os.path.exists(outputdir):
+    os.makedirs(outputdir)
 
 
 class AdvanActorCritic:
@@ -97,11 +103,9 @@ class AdvanActorCritic:
         self.policy.load_weights(pname)
 
 
-n = 30  # len till bootstrap
 state, r = start()
-agent = AdvanActorCritic(state.shape, 4, n, "./output/ac/")
+agent = AdvanActorCritic(state.shape, 4, n, outputdir)
 
-agent.load("./output/ac/value_0000.hdf5", "./output/ac/policy_0000.hdf5")
 
 for i in range(20000):
     state, r = start()
