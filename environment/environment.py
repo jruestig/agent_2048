@@ -1,5 +1,10 @@
 import numpy as np
-from environment.movement import shift_and_merge, action_to_dir_and_ax
+if __name__ == "__main__":
+    from movement import (shift_and_merge, action_to_dir_and_ax,
+                          game_move)
+else:
+    from environment.movement import (shift_and_merge, action_to_dir_and_ax,
+                                      game_move)
 
 
 def start():

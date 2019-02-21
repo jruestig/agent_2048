@@ -1,23 +1,20 @@
-import numpy as np
-
 import random
+import numpy as np
 from numpy.random import choice
 from collections import deque
 
 from keras.models import Sequential, Model
 from keras.layers import Dense, Conv2D, Flatten, Input
 from keras.optimizers import Adam
-import keras.backend as K
-import time
-
-import pdb
 
 from environment.environment import legal_moves, start
 from environment.movement import game_move, action_to_dir_and_ax
 
+from os.path import join
+
 
 class AdvanActorCritic:
-    def __init__(self, state_shape, action_size, n):
+    def __init__(self, state_shape, action_size, n, outdir):
         self.input_shape = state_shape + (17,)
         self.action_size = action_size
 
@@ -29,6 +26,8 @@ class AdvanActorCritic:
         self.memory = deque(maxlen=4000)
         self.init_remember(n)
         self.n = n
+
+        self.outdir = outdir
 
     def _build_model(self):
         inputs = Input(self.input_shape)
@@ -47,7 +46,8 @@ class AdvanActorCritic:
 
         pfuct = Dense(self.action_size, input_shape=[20], activation="softmax")
         policy = Model(input=inputs, output=pfuct(ishared))
-        policy.compile(loss="categorical_crossentropy", optimizer=Adam(lr=self.lr_value))
+        policy.compile(loss="categorical_crossentropy",
+                       optimizer=Adam(lr=self.lr_value))
         return value, policy
 
     def reshape(self, state):
@@ -77,9 +77,6 @@ class AdvanActorCritic:
         self.states = deque(maxlen=n+1)
         self.action = deque(maxlen=n)
 
-    def hinge(y_true, y_pred):
-        return K.mean(K.maximum(1. - y_true * y_pred, 0.), axis=-1)
-
     def train(self, batch_size):
         minibatch = random.sample(self.memory, batch_size)
         for bstate, action, rewards, endstate in minibatch:
@@ -91,21 +88,31 @@ class AdvanActorCritic:
             pred[0][action] = G - self.value.predict(self.reshape(bstate))[0]
             self.policy.fit(self.reshape(bstate), pred, epochs=1, verbose=0)
 
+    def save(self, name):
+        self.value.save_weights(join(self.outdir, "value_" + name + ".hdf5"))
+        self.policy.save_weights(join(self.outdir, "policy_" + name + ".hdf5"))
+
+    def load(self, vname, pname):
+        self.value.load_weights(vname)
+        self.policy.load_weights(pname)
+
 
 n = 30  # len till bootstrap
 state, r = start()
-agent = AdvanActorCritic(state.shape, 4, n)
-agent.states.append((state))
-print(state)
+agent = AdvanActorCritic(state.shape, 4, n, "./output/ac/")
+
+agent.load("./output/ac/value_0000.hdf5", "./output/ac/policy_0000.hdf5")
 
 for i in range(20000):
     state, r = start()
     agent.states.append((state))
-    print(state)
+    # print(state)
     for ii in range(200):
         a, pred = agent.act(state)
         state, re = game_move(state, *action_to_dir_and_ax(a))
         agent.remember(state, a, re, False)
+        if legal_moves(state).sum() == 0:
+            break
         if ii % 40 == 0:
             print(pred)
         r += re
@@ -113,3 +120,5 @@ for i in range(20000):
     print(state)
     agent.train(20)
     agent.init_remember(agent.n)
+    if i % 4 == 0:
+        agent.save("{:04}".format(int(i/4)))
