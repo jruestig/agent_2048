@@ -11,4 +11,4 @@ To start and view the agents just run the python scripts
 
 1) montecarlo.py  (requirement numpy)
 
-2) qvaluenetwork.py  (requirement numpy, keras)
+2) qvaluenetwork.py  (requirement numpy, keras, tensorflow as backend)
