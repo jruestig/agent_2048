@@ -13,7 +13,7 @@ from environment.movement import game_move, action_to_dir_and_ax
 from os.path import join
 import os
 
-outputdir = "./output/ac"
+outputdir = "./output/new_setting"
 if not os.path.exists(outputdir):
     os.makedirs(outputdir)
 
@@ -63,6 +63,9 @@ class AdvanActorCritic:
         return nstate
 
     def act(self, state):
+        legal = legal_moves(state)
+        if legal.sum() == 1:
+            return np.arange(4)[legal], 0
         state = self.reshape(state)
         pred = self.policy.predict(state)[0]
         a = choice(np.arange(4), p=pred)
@@ -103,22 +106,29 @@ class AdvanActorCritic:
 n = 30  # len till bootstrap
 state, r = start()
 agent = AdvanActorCritic(state.shape, 4, 0.999, n, outputdir)
-agent.load("./output/ac/value_0010.hdf5", "./output/ac/policy_0010.hdf5")
+# agent.load("./output/ac/value_0010.hdf5", "./output/ac/policy_0010.hdf5")
 
-x = 10
+x = 20
+rn = 800
+k = 0
 
-for i in range(20000):
+for i in range(40000):
     state, r = start()
     agent.states.append((state))
-    for ii in range(5000):
+    for ii in range(rn):
         a, pred = agent.act(state)
         state, re = game_move(state, *action_to_dir_and_ax(a))
         agent.remember(state, a, re, False)
         if legal_moves(state).sum() == 0:
             break
         r += re
-    print(r, state.max())
-    if state.max() >= 512:
+        print(state)
+    print("sv: ", int(i/x), r, state.max())
+    if state.max() >= 1000:
+        if k == 0:
+            agent.save("./output/first1024.hdf5")
+            k += 1
+            rn = 2000
         print(state)
     agent.train(20)
     agent.init_remember(agent.n)
